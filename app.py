@@ -20,15 +20,10 @@ st.markdown(
         max-height: calc(100vh - 7.25rem);
         overflow-y: auto;
         padding: 0.15rem 0.5rem 0.35rem 0;
-    }
-
-    .question-nav.is-fixed {
-        position: fixed;
+        position: sticky;
         top: 7.25rem;
-        left: max(0.5rem, calc((100vw - 78rem) / 2 - 5.25rem));
-        z-index: 100;
-        width: clamp(13rem, 18vw, 18rem);
-        max-height: calc(100vh - 8.5rem);
+        align-self: start;
+        margin-left: -1rem;
     }
 
     .question-nav-title {
@@ -75,15 +70,14 @@ st.markdown(
     }
 
     @media (max-width: 900px) {
-        .question-nav.is-fixed {
+        .question-nav {
             top: 3.65rem;
-            left: 0;
-            right: 0;
-            width: 100%;
             max-height: 34vh;
             padding: 0.75rem 1rem;
             background: var(--background-color, rgb(14, 17, 23));
             border-bottom: 1px solid rgba(156, 163, 175, 0.2);
+            z-index: 100;
+            margin-left: 0;
         }
 
         .question-nav-grid {
@@ -287,15 +281,6 @@ def sync_question_nav_answer_state(question_count):
             }});
         }}
 
-        function updateNavPinState() {{
-            const nav = doc.querySelector('.question-nav');
-            const pin = doc.getElementById('question-nav-pin');
-            if (!nav || !pin) return;
-
-            const fixedTop = window.parent.innerWidth <= 900 ? 58 : 116;
-            nav.classList.toggle('is-fixed', pin.getBoundingClientRect().top <= fixedTop);
-        }}
-
         function inputFromEvent(event) {{
             const target = event.target;
             if (!target || !target.closest) return null;
@@ -331,11 +316,8 @@ def sync_question_nav_answer_state(question_count):
 
         function refresh() {{
             updateNav();
-            updateNavPinState();
         }}
 
-        window.parent.addEventListener('scroll', updateNavPinState, {{ passive: true }});
-        window.parent.addEventListener('resize', updateNavPinState, {{ passive: true }});
         doc.addEventListener('pointerdown', handleEarlyInput, true);
         doc.addEventListener('mousedown', handleEarlyInput, true);
         doc.addEventListener('touchstart', handleEarlyInput, true);
@@ -354,14 +336,11 @@ def sync_question_nav_answer_state(question_count):
     )
 
 
-# ----------------- GIAO DIỆN NHẬP JSON -----------------
-require_password()
+# ----------------- STAGE RENDERING FUNCTIONS -----------------
+def render_upload_stage():
+    st.markdown("### Bước 1. Nhập JSON đề thi")
 
-st.title("A TTQT nhíeeeee")
-
-st.markdown("### Bước 1. Nhập JSON đề thi")
-
-example_json = """
+    example_json = """
 [
   {
     "id": ID của câu hỏi (số nguyên dương lớn hơn 0),
@@ -376,53 +355,55 @@ example_json = """
 ]
 """.strip()
 
-json_text = st.text_area(
-    "Danh sách câu hỏi (JSON). Mỗi phần tử là một object gồm các trường: "
-    "`id`, `question`, `type` ('single' hoặc 'multiple'), `options` (list các đáp án), "
-    "`correct_answers` (list index đáp án đúng, bắt đầu từ 0).",
-    value=example_json,
-    height=300,
-)
+    json_text = st.text_area(
+        "Danh sách câu hỏi (JSON). Mỗi phần tử là một object gồm các trường: "
+        "`id`, `question`, `type` ('single' hoặc 'multiple'), `options` (list các đáp án), "
+        "`correct_answers` (list index đáp án đúng, bắt đầu từ 0).",
+        value=example_json,
+        height=300,
+    )
 
-uploaded_file = st.file_uploader(
-    "Hoặc upload file đề thi (.json hoặc .txt)",
-    type=["json", "txt"],
-    help="File cần chứa nội dung JSON giống ô nhập bên trên.",
-)
+    uploaded_file = st.file_uploader(
+        "Hoặc upload file đề thi (.json hoặc .txt)",
+        type=["json", "txt"],
+        help="File cần chứa nội dung JSON giống ô nhập bên trên.",
+    )
 
-col_load, col_info = st.columns([1, 3])
-with col_load:
-    load_btn = st.button("Tải đề thi / Cập nhật")
+    col_load, col_info = st.columns([1, 3])
+    with col_load:
+        load_btn = st.button("Tải đề thi / Cập nhật")
 
-with col_info:
-    st.caption("Bạn có thể paste JSON hoặc upload file `.json` / `.txt`, rồi bấm **Tải đề thi** để cập nhật.")
+    with col_info:
+        st.caption("Bạn có thể paste JSON hoặc upload file `.json` / `.txt`, rồi bấm **Tải đề thi** để cập nhật.")
 
-if "questions" not in st.session_state:
-    st.session_state["questions"] = None
+    if load_btn:
+        try:
+            if uploaded_file is not None:
+                source_text = uploaded_file.getvalue().decode("utf-8-sig")
+            else:
+                source_text = json_text
 
-if load_btn:
-    try:
-        if uploaded_file is not None:
-            source_text = uploaded_file.getvalue().decode("utf-8-sig")
-        else:
-            source_text = json_text
-
-        load_questions_from_text(source_text)
-        st.success("Đã tải đề thi thành công!")
-    except Exception as e:
-        st.session_state["questions"] = None
-        st.error(f"Lỗi khi đọc đề thi: {e}")
+            load_questions_from_text(source_text)
+            st.session_state["current_stage"] = "exam"
+            st.rerun()
+        except Exception as e:
+            st.session_state["questions"] = None
+            st.error(f"Lỗi khi đọc đề thi: {e}")
 
 
-# ----------------- GIAO DIỆN LÀM BÀI -----------------
-questions = st.session_state.get("questions")
+def render_exam_stage():
+    questions = st.session_state.get("questions")
+    if not questions:
+        st.error("Không tìm thấy dữ liệu đề thi!")
+        if st.button("Quay lại"):
+            st.session_state["current_stage"] = "upload"
+            st.rerun()
+        return
 
-if questions:
-    st.markdown("---")
     st.markdown("### Bước 2. Làm bài thi")
 
     # layout chia 2 cột giống hình: trái là danh sách số câu, phải là nội dung
-    col_nav, col_exam = st.columns([1, 3])
+    col_nav, col_exam = st.columns([1, 4])
 
     with col_nav:
         render_question_nav(questions)
@@ -454,7 +435,7 @@ if questions:
                     st.checkbox(opt, key=f"q_{i}_opt_{j}")
             st.markdown("---")
 
-        submit_btn = st.button("Nộp bài thi")
+        submit_btn = st.button("Nộp bài thi", type="primary")
 
         if submit_btn:
             total_score, detail_scores = grade_exam(questions)
@@ -463,45 +444,86 @@ if questions:
                 "detail": detail_scores,
                 "max_score": len(questions),  # mỗi câu tối đa 1 điểm
             }
+            st.session_state["current_stage"] = "result"
+            st.rerun()
 
-        # luôn hiển thị kết quả gần nhất nếu có
-        if "last_result" in st.session_state:
-            res = st.session_state["last_result"]
-            st.markdown("## Kết quả")
-            st.write(
-                f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
-                f"({res['total'] / res['max_score'] * 100:.1f}%)"
-            )
 
-            st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
-            for d in res["detail"]:
-                st.markdown(f"#### Câu {d['id']} – điểm: **{d['score']:.2f}**")
-                st.markdown(d["question"])
+def render_result_stage():
+    if "last_result" not in st.session_state:
+        st.error("Chưa có kết quả thi!")
+        if st.button("Quay lại"):
+            st.session_state["current_stage"] = "upload"
+            st.rerun()
+        return
 
-                # hiển thị từng đáp án với icon trực quan
-                for idx, opt in enumerate(d["options"]):
-                    is_correct = idx in d["correct_indices"]
-                    is_chosen = idx in d["user_indices"]
+    res = st.session_state["last_result"]
+    st.markdown("## Kết quả")
+    st.write(
+        f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
+        f"({res['total'] / res['max_score'] * 100:.1f}%)"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Làm lại bài này"):
+            clear_answers()
+            st.session_state["current_stage"] = "exam"
+            st.rerun()
+    with col2:
+        if st.button("Tải đề thi mới"):
+            st.session_state["questions"] = None
+            clear_answers()
+            st.session_state["current_stage"] = "upload"
+            st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
+    for d in res["detail"]:
+        st.markdown(f"#### Câu {d['id']} – điểm: **{d['score']:.2f}**")
+        st.markdown(d["question"])
 
-                    if is_correct and is_chosen:
-                        prefix = "✅"  # đúng và bạn chọn
-                        note = " **(bạn chọn, đáp án đúng)**"
-                    elif is_correct and not is_chosen:
-                        prefix = "☑️"  # đúng nhưng không chọn
-                        note = " **(đáp án đúng, bạn bỏ sót)**"
-                    elif (not is_correct) and is_chosen:
-                        prefix = "❌"  # sai nhưng bạn chọn
-                        note = " **(bạn chọn sai)**"
-                    else:
-                        prefix = "▫️"  # sai và không chọn
-                        note = ""
+        # hiển thị từng đáp án với icon trực quan
+        for idx, opt in enumerate(d["options"]):
+            is_correct = idx in d["correct_indices"]
+            is_chosen = idx in d["user_indices"]
 
-                    st.markdown(f"{prefix} {opt}{note}")
-                    # show explanation for this option if provided in question data
-                    explanations = d.get("explanations", [])
-                    if idx < len(explanations) and explanations[idx]:
-                        st.caption(explanations[idx])
+            if is_correct and is_chosen:
+                prefix = "✅"  # đúng và bạn chọn
+                note = " **(bạn chọn, đáp án đúng)**"
+            elif is_correct and not is_chosen:
+                prefix = "☑️"  # đúng nhưng không chọn
+                note = " **(đáp án đúng, bạn bỏ sót)**"
+            elif (not is_correct) and is_chosen:
+                prefix = "❌"  # sai nhưng bạn chọn
+                note = " **(bạn chọn sai)**"
+            else:
+                prefix = "▫️"  # sai và không chọn
+                note = ""
 
-                st.markdown("---")
-else:
-    st.info("Hãy nhập JSON đề thi và bấm **Tải đề thi / Cập nhật** để bắt đầu làm bài.")
+            st.markdown(f"{prefix} {opt}{note}")
+            # show explanation for this option if provided in question data
+            explanations = d.get("explanations", [])
+            if idx < len(explanations) and explanations[idx]:
+                st.caption(explanations[idx])
+
+        st.markdown("---")
+
+# ----------------- MAIN FLOW -----------------
+require_password()
+
+st.title("A TTQT nhíeeeee")
+
+if "questions" not in st.session_state:
+    st.session_state["questions"] = None
+
+if "current_stage" not in st.session_state:
+    st.session_state["current_stage"] = "upload"
+
+stage = st.session_state["current_stage"]
+
+if stage == "upload":
+    render_upload_stage()
+elif stage == "exam":
+    render_exam_stage()
+elif stage == "result":
+    render_result_stage()
