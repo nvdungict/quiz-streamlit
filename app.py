@@ -527,6 +527,36 @@ def render_result_stage():
     res = st.session_state["last_result"]
     questions = st.session_state.get("questions", [])
 
+    pct = (res['total'] / res['max_score']) * 100 if res['max_score'] > 0 else 0
+    if pct >= 90:
+        title_msg = "Hehee giỏi waaa trời"
+    elif pct >= 80:
+        title_msg = "Cũng cũng=))))"
+    else:
+        title_msg = "Học lại nhanhhh"
+
+    st.markdown(f"## Kết quả: {title_msg}")
+    st.write(
+        f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
+        f"({pct:.1f}%)"
+    )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Làm lại bài này"):
+            clear_answers()
+            st.session_state["current_stage"] = "exam"
+            st.rerun()
+    with col2:
+        if st.button("Tải đề thi mới"):
+            st.session_state["questions"] = None
+            clear_answers()
+            st.session_state["current_stage"] = "upload"
+            st.rerun()
+            
+    st.markdown("---")
+    st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
+
     col_nav, col_result = st.columns([1, 3])
     
     with col_nav:
@@ -535,28 +565,6 @@ def render_result_stage():
         sync_question_nav_sticky()
 
     with col_result:
-        st.markdown("## Kết quả")
-        st.write(
-            f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
-            f"({res['total'] / res['max_score'] * 100:.1f}%)"
-        )
-    
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Làm lại bài này"):
-                clear_answers()
-                st.session_state["current_stage"] = "exam"
-                st.rerun()
-        with col2:
-            if st.button("Tải đề thi mới"):
-                st.session_state["questions"] = None
-                clear_answers()
-                st.session_state["current_stage"] = "upload"
-                st.rerun()
-        
-        st.markdown("---")
-        st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
-        
         for i, d in enumerate(res["detail"]):
             st.markdown(
                 f'<div id="question-{i + 1}" class="question-anchor"></div>',
