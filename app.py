@@ -61,6 +61,18 @@ st.markdown(
         color: #ffffff !important;
     }
 
+    .question-nav-item.correct {
+        background: #22c55e !important;
+        border-color: #16a34a !important;
+        color: #ffffff !important;
+    }
+
+    .question-nav-item.wrong {
+        background: #ef4444 !important;
+        border-color: #dc2626 !important;
+        color: #ffffff !important;
+    }
+
     .question-anchor {
         scroll-margin-top: 1rem;
     }
@@ -219,13 +231,69 @@ def render_question_nav(questions):
         f"""
         <div id="question-nav-pin"></div>
         <div class="question-nav">
-            <div class="question-nav-title">Câu hỏi</div>
             <div class="question-nav-grid">
                 {''.join(nav_items)}
             </div>
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+def render_result_question_nav(questions, detail_scores):
+    nav_items = []
+    for idx, (question, detail) in enumerate(zip(questions, detail_scores)):
+        is_correct = detail['score'] == 1.0
+        result_class = " correct" if is_correct else " wrong"
+        label = html.escape(str(idx + 1))
+        nav_items.append(
+            f'<a class="question-nav-item{result_class}" '
+            f'href="#question-{idx + 1}" data-question-index="{idx}" '
+            f'title="Question {idx + 1}">{label}</a>'
+        )
+
+    st.markdown(
+        f"""
+        <div id="question-nav-pin"></div>
+        <div class="question-nav">
+            <div class="question-nav-grid">
+                {''.join(nav_items)}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def sync_question_nav_sticky():
+    components.html(
+        """
+        <script>
+        const doc = window.parent.document;
+        const nav = doc.querySelector('.question-nav');
+        if (nav) {
+            let col = nav.closest('[data-testid="column"]');
+            let row = nav.closest('[data-testid="stHorizontalBlock"]');
+            if (!col && row) {
+                let current = nav;
+                while (current.parentElement && current.parentElement !== row) {
+                    current = current.parentElement;
+                }
+                col = current;
+            }
+            if (col && row) {
+                row.style.alignItems = 'stretch';
+                col.style.position = 'sticky';
+                col.style.alignSelf = 'flex-start';
+                col.style.zIndex = '100';
+                if (window.parent.innerWidth <= 900) {
+                    col.style.top = '3.65rem';
+                } else {
+                    col.style.top = '7.25rem';
+                }
+            }
+        }
+        </script>
+        """,
+        height=0,
     )
 
 
@@ -273,36 +341,7 @@ def sync_question_nav_answer_state(question_count):
                 item.classList.toggle('answered', Boolean(answered[idx]));
             }});
             
-            // Apply sticky to the parent Streamlit column
-            const nav = doc.querySelector('.question-nav');
-            if (nav) {{
-                // Find the column by walking up to the horizontal block
-                let col = nav.closest('[data-testid="column"]');
-                let row = nav.closest('[data-testid="stHorizontalBlock"]');
-                
-                if (!col && row) {{
-                    let current = nav;
-                    while (current.parentElement && current.parentElement !== row) {{
-                        current = current.parentElement;
-                    }}
-                    col = current;
-                }}
-                
-                if (col && row) {{
-                    // Make sure the row stretches so the column has room to stick
-                    row.style.alignItems = 'stretch';
-                    
-                    // Make the column sticky
-                    col.style.position = 'sticky';
-                    col.style.alignSelf = 'flex-start';
-                    col.style.zIndex = '100';
-                    if (window.parent.innerWidth <= 900) {{
-                        col.style.top = '3.65rem';
-                    }} else {{
-                        col.style.top = '7.25rem';
-                    }}
-                }}
-            }}
+            // The sticky behavior is now handled separately by sync_question_nav_sticky
         }}
 
         function inputFromEvent(event) {{
@@ -430,8 +469,25 @@ def render_exam_stage():
     col_nav, col_exam = st.columns([1, 3])
 
     with col_nav:
+        col_title, col_btn = st.columns([1, 1])
+        with col_title:
+            st.markdown("<h3 style='margin:0; padding:0;'>Câu hỏi</h3>", unsafe_allow_html=True)
+        with col_btn:
+            submit_btn = st.button("Nộp bài thi", type="primary", use_container_width=True)
+
         render_question_nav(questions)
         sync_question_nav_answer_state(len(questions))
+        sync_question_nav_sticky()
+
+        if submit_btn:
+            total_score, detail_scores = grade_exam(questions)
+            st.session_state["last_result"] = {
+                "total": total_score,
+                "detail": detail_scores,
+                "max_score": len(questions),  # mỗi câu tối đa 1 điểm
+            }
+            st.session_state["current_stage"] = "result"
+            st.rerun()
 
     with col_exam:
         st.subheader("Exam Questions")
@@ -459,18 +515,6 @@ def render_exam_stage():
                     st.checkbox(opt, key=f"q_{i}_opt_{j}")
             st.markdown("---")
 
-        submit_btn = st.button("Nộp bài thi", type="primary")
-
-        if submit_btn:
-            total_score, detail_scores = grade_exam(questions)
-            st.session_state["last_result"] = {
-                "total": total_score,
-                "detail": detail_scores,
-                "max_score": len(questions),  # mỗi câu tối đa 1 điểm
-            }
-            st.session_state["current_stage"] = "result"
-            st.rerun()
-
 
 def render_result_stage():
     if "last_result" not in st.session_state:
@@ -481,11 +525,21 @@ def render_result_stage():
         return
 
     res = st.session_state["last_result"]
-    st.markdown("## Kết quả")
-    st.write(
-        f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
-        f"({res['total'] / res['max_score'] * 100:.1f}%)"
-    )
+    questions = st.session_state.get("questions", [])
+
+    col_nav, col_result = st.columns([1, 3])
+    
+    with col_nav:
+        st.markdown("<h3 style='margin:0; padding:0;'>Câu hỏi</h3>", unsafe_allow_html=True)
+        render_result_question_nav(questions, res["detail"])
+        sync_question_nav_sticky()
+
+    with col_result:
+        st.markdown("## Kết quả")
+        st.write(
+            f"Điểm tổng: **{res['total']:.2f} / {res['max_score']}** "
+            f"({res['total'] / res['max_score'] * 100:.1f}%)"
+        )
     
     col1, col2 = st.columns(2)
     with col1:
