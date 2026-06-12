@@ -297,8 +297,8 @@ def sync_question_nav_answer_state(question_count):
             if (!nav || !marker) return;
 
             const markerTop = marker.getBoundingClientRect().top;
-            const showThreshold = Math.min(320, window.parent.innerHeight * 0.45);
-            nav.classList.toggle('is-visible', markerTop <= showThreshold);
+            const visibleLine = window.parent.innerHeight * 0.75;
+            nav.classList.toggle('is-visible', markerTop <= visibleLine);
         }}
 
         function inputFromEvent(event) {{
