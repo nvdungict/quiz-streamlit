@@ -20,10 +20,6 @@ st.markdown(
         max-height: calc(100vh - 7.25rem);
         overflow-y: auto;
         padding: 0.15rem 0.5rem 0.35rem 0;
-        position: sticky;
-        top: 7.25rem;
-        align-self: start;
-        margin-left: -1rem;
     }
 
     .question-nav-title {
@@ -71,13 +67,10 @@ st.markdown(
 
     @media (max-width: 900px) {
         .question-nav {
-            top: 3.65rem;
             max-height: 34vh;
             padding: 0.75rem 1rem;
             background: var(--background-color, rgb(14, 17, 23));
             border-bottom: 1px solid rgba(156, 163, 175, 0.2);
-            z-index: 100;
-            margin-left: 0;
         }
 
         .question-nav-grid {
@@ -279,6 +272,22 @@ def sync_question_nav_answer_state(question_count):
                 const idx = Number(item.dataset.questionIndex);
                 item.classList.toggle('answered', Boolean(answered[idx]));
             }});
+            
+            // Apply sticky to the parent Streamlit column
+            const nav = doc.querySelector('.question-nav');
+            if (nav) {{
+                const col = nav.closest('[data-testid="column"]');
+                if (col) {{
+                    col.style.position = 'sticky';
+                    col.style.alignSelf = 'flex-start';
+                    col.style.zIndex = '100';
+                    if (window.parent.innerWidth <= 900) {{
+                        col.style.top = '3.65rem';
+                    }} else {{
+                        col.style.top = '7.25rem';
+                    }}
+                }}
+            }}
         }}
 
         function inputFromEvent(event) {{
