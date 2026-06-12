@@ -2,8 +2,11 @@ import json
 import html
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="Quiz Demo", layout="wide")
+
+APP_PASSWORD = "iuanh"
 
 st.markdown(
     """
@@ -13,11 +16,14 @@ st.markdown(
     }
 
     .question-nav {
-        position: sticky;
-        top: 1rem;
-        max-height: calc(100vh - 2rem);
+        position: fixed;
+        top: 7.25rem;
+        left: max(1.5rem, calc((100vw - 78rem) / 2));
+        z-index: 100;
+        width: clamp(13rem, 18vw, 18rem);
+        max-height: calc(100vh - 8.5rem);
         overflow-y: auto;
-        padding-right: 0.35rem;
+        padding: 0.15rem 0.5rem 0.35rem 0;
     }
 
     .question-nav-title {
@@ -65,23 +71,50 @@ st.markdown(
 
     @media (max-width: 900px) {
         .question-nav {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            max-height: 42vh;
-            padding: 0.75rem 0;
-            background: rgb(14, 17, 23);
+            top: 3.65rem;
+            left: 0;
+            right: 0;
+            width: 100%;
+            max-height: 34vh;
+            padding: 0.75rem 1rem;
+            background: var(--background-color, rgb(14, 17, 23));
+            border-bottom: 1px solid rgba(156, 163, 175, 0.2);
         }
 
         .question-nav-grid {
-            grid-template-columns: repeat(6, minmax(2.5rem, 1fr));
+            grid-template-columns: repeat(8, minmax(2.25rem, 1fr));
             gap: 0.5rem;
+        }
+
+        .question-anchor {
+            scroll-margin-top: 15rem;
         }
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+
+def require_password():
+    if st.session_state.get("authenticated"):
+        return
+
+    st.title("A TTQT nhíeeeee")
+    st.markdown("### Nhập mật khẩu để vào app")
+
+    with st.form("password_form"):
+        password = st.text_input("Mật khẩu", type="password")
+        submitted = st.form_submit_button("Vào app")
+
+    if submitted:
+        if password == APP_PASSWORD:
+            st.session_state["authenticated"] = True
+            st.rerun()
+        else:
+            st.error("Sai mật khẩu.")
+
+    st.stop()
 
 
 # ----------------- HÀM CHẤM ĐIỂM -----------------
@@ -186,7 +219,8 @@ def render_question_nav(questions):
         label = html.escape(str(idx + 1))
         nav_items.append(
             f'<a class="question-nav-item{answered_class}" '
-            f'href="#question-{idx + 1}" title="Question {idx + 1}">{label}</a>'
+            f'href="#question-{idx + 1}" data-question-index="{idx}" '
+            f'title="Question {idx + 1}">{label}</a>'
         )
 
     st.markdown(
@@ -202,8 +236,80 @@ def render_question_nav(questions):
     )
 
 
+def sync_question_nav_answer_state(question_count):
+    components.html(
+        f"""
+        <script>
+        const questionCount = {question_count};
+        const doc = window.parent.document;
+
+        function anchors() {{
+            return Array.from({{ length: questionCount }}, (_, idx) =>
+                doc.getElementById(`question-${{idx + 1}}`)
+            ).filter(Boolean);
+        }}
+
+        function questionForInput(input, markers) {{
+            let current = -1;
+            for (let idx = 0; idx < markers.length; idx += 1) {{
+                const relation = markers[idx].compareDocumentPosition(input);
+                if (relation & window.parent.Node.DOCUMENT_POSITION_FOLLOWING) {{
+                    current = idx;
+                }} else {{
+                    break;
+                }}
+            }}
+            return current;
+        }}
+
+        function updateNav() {{
+            const markers = anchors();
+            const answered = Array(questionCount).fill(false);
+            const inputs = doc.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+
+            inputs.forEach((input) => {{
+                if (!input.checked) return;
+                const idx = questionForInput(input, markers);
+                if (idx >= 0 && idx < questionCount) {{
+                    answered[idx] = true;
+                }}
+            }});
+
+            doc.querySelectorAll('.question-nav-item[data-question-index]').forEach((item) => {{
+                const idx = Number(item.dataset.questionIndex);
+                item.classList.toggle('answered', Boolean(answered[idx]));
+            }});
+        }}
+
+        function bindInputs() {{
+            doc.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {{
+                if (input.dataset.quizNavBound === 'true') return;
+                input.dataset.quizNavBound = 'true';
+                input.addEventListener('change', updateNav, {{ passive: true }});
+                input.addEventListener('click', () => window.setTimeout(updateNav, 0), {{ passive: true }});
+            }});
+        }}
+
+        function refresh() {{
+            bindInputs();
+            updateNav();
+        }}
+
+        refresh();
+        const observer = new MutationObserver(refresh);
+        observer.observe(doc.body, {{ childList: true, subtree: true }});
+        window.setTimeout(refresh, 100);
+        window.setTimeout(refresh, 500);
+        </script>
+        """,
+        height=0,
+    )
+
+
 # ----------------- GIAO DIỆN NHẬP JSON -----------------
-st.title("Exam Questions - Streamlit Demo")
+require_password()
+
+st.title("A TTQT nhíeeeee")
 
 st.markdown("### Bước 1. Nhập JSON đề thi")
 
@@ -298,6 +404,8 @@ if questions:
                 for j, opt in enumerate(options):
                     st.checkbox(opt, key=f"q_{i}_opt_{j}")
             st.markdown("---")
+
+        sync_question_nav_answer_state(len(questions))
 
         submit_btn = st.button("Nộp bài thi")
 
