@@ -541,50 +541,54 @@ def render_result_stage():
             f"({res['total'] / res['max_score'] * 100:.1f}%)"
         )
     
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Làm lại bài này"):
-            clear_answers()
-            st.session_state["current_stage"] = "exam"
-            st.rerun()
-    with col2:
-        if st.button("Tải đề thi mới"):
-            st.session_state["questions"] = None
-            clear_answers()
-            st.session_state["current_stage"] = "upload"
-            st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
-    for d in res["detail"]:
-        st.markdown(f"#### Câu {d['id']} – điểm: **{d['score']:.2f}**")
-        st.markdown(d["question"])
-
-        # hiển thị từng đáp án với icon trực quan
-        for idx, opt in enumerate(d["options"]):
-            is_correct = idx in d["correct_indices"]
-            is_chosen = idx in d["user_indices"]
-
-            if is_correct and is_chosen:
-                prefix = "✅"  # đúng và bạn chọn
-                note = " **(bạn chọn, đáp án đúng)**"
-            elif is_correct and not is_chosen:
-                prefix = "☑️"  # đúng nhưng không chọn
-                note = " **(đáp án đúng, bạn bỏ sót)**"
-            elif (not is_correct) and is_chosen:
-                prefix = "❌"  # sai nhưng bạn chọn
-                note = " **(bạn chọn sai)**"
-            else:
-                prefix = "▫️"  # sai và không chọn
-                note = ""
-
-            st.markdown(f"{prefix} {opt}{note}")
-            # show explanation for this option if provided in question data
-            explanations = d.get("explanations", [])
-            if idx < len(explanations) and explanations[idx]:
-                st.caption(explanations[idx])
-
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Làm lại bài này"):
+                clear_answers()
+                st.session_state["current_stage"] = "exam"
+                st.rerun()
+        with col2:
+            if st.button("Tải đề thi mới"):
+                st.session_state["questions"] = None
+                clear_answers()
+                st.session_state["current_stage"] = "upload"
+                st.rerun()
+        
         st.markdown("---")
+        st.markdown("### Chi tiết từng câu (kèm đề và đáp án)")
+        
+        for i, d in enumerate(res["detail"]):
+            st.markdown(
+                f'<div id="question-{i + 1}" class="question-anchor"></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(f"**Question {d.get('id', i+1)}.** {d['question']} (Điểm: **{d['score']:.2f}**)")
+
+            # hiển thị từng đáp án với icon trực quan
+            for idx, opt in enumerate(d["options"]):
+                is_correct = idx in d["correct_indices"]
+                is_chosen = idx in d["user_indices"]
+
+                if is_correct and is_chosen:
+                    prefix = "✅"  # đúng và bạn chọn
+                    note = " **(bạn chọn, đáp án đúng)**"
+                elif is_correct and not is_chosen:
+                    prefix = "☑️"  # đúng nhưng không chọn
+                    note = " **(đáp án đúng, bạn bỏ sót)**"
+                elif (not is_correct) and is_chosen:
+                    prefix = "❌"  # sai nhưng bạn chọn
+                    note = " **(bạn chọn sai)**"
+                else:
+                    prefix = "▫️"  # sai và không chọn
+                    note = ""
+
+                st.markdown(f"{prefix} {opt}{note}")
+                # show explanation for this option if provided in question data
+                explanations = d.get("explanations", [])
+                if idx < len(explanations) and explanations[idx]:
+                    st.caption(explanations[idx])
+
+            st.markdown("---")
 
 # ----------------- MAIN FLOW -----------------
 require_password()
