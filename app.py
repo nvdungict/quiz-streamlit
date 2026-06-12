@@ -276,8 +276,23 @@ def sync_question_nav_answer_state(question_count):
             // Apply sticky to the parent Streamlit column
             const nav = doc.querySelector('.question-nav');
             if (nav) {{
-                const col = nav.closest('[data-testid="column"]');
-                if (col) {{
+                // Find the column by walking up to the horizontal block
+                let col = nav.closest('[data-testid="column"]');
+                let row = nav.closest('[data-testid="stHorizontalBlock"]');
+                
+                if (!col && row) {{
+                    let current = nav;
+                    while (current.parentElement && current.parentElement !== row) {{
+                        current = current.parentElement;
+                    }}
+                    col = current;
+                }}
+                
+                if (col && row) {{
+                    // Make sure the row stretches so the column has room to stick
+                    row.style.alignItems = 'stretch';
+                    
+                    // Make the column sticky
                     col.style.position = 'sticky';
                     col.style.alignSelf = 'flex-start';
                     col.style.zIndex = '100';
@@ -412,7 +427,7 @@ def render_exam_stage():
     st.markdown("### Bước 2. Làm bài thi")
 
     # layout chia 2 cột giống hình: trái là danh sách số câu, phải là nội dung
-    col_nav, col_exam = st.columns([1, 4])
+    col_nav, col_exam = st.columns([1, 3])
 
     with col_nav:
         render_question_nav(questions)
