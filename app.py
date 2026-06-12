@@ -631,12 +631,39 @@ if st.session_state.get("scroll_to_top"):
     components.html(
         """
         <script>
-            const doc = window.parent.document;
-            const main = doc.querySelector('.main') || doc.querySelector('[data-testid="stAppViewContainer"]');
-            if (main) {
-                main.scrollTo({top: 0, behavior: 'instant'});
-            }
-            window.parent.scrollTo({top: 0, behavior: 'instant'});
+            setTimeout(() => {
+                const doc = window.parent.document;
+                const containers = [
+                    doc.querySelector('.main'),
+                    doc.querySelector('[data-testid="stAppViewContainer"]'),
+                    doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                    doc.documentElement,
+                    doc.body,
+                    window.parent
+                ];
+                containers.forEach(c => {
+                    if (c && c.scrollTo) {
+                        c.scrollTo({top: 0, behavior: 'instant'});
+                    }
+                });
+            }, 50);
+            
+            setTimeout(() => {
+                const doc = window.parent.document;
+                const containers = [
+                    doc.querySelector('.main'),
+                    doc.querySelector('[data-testid="stAppViewContainer"]'),
+                    doc.querySelector('[data-testid="stMainBlockContainer"]'),
+                    doc.documentElement,
+                    doc.body,
+                    window.parent
+                ];
+                containers.forEach(c => {
+                    if (c && c.scrollTo) {
+                        c.scrollTo({top: 0, behavior: 'instant'});
+                    }
+                });
+            }, 500);
         </script>
         """,
         height=0,
