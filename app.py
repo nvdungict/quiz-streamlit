@@ -18,12 +18,22 @@ st.markdown(
     .question-nav {
         position: fixed;
         top: 7.25rem;
-        left: max(1.5rem, calc((100vw - 78rem) / 2));
+        left: max(0.5rem, calc((100vw - 78rem) / 2 - 5.25rem));
         z-index: 100;
         width: clamp(13rem, 18vw, 18rem);
         max-height: calc(100vh - 8.5rem);
         overflow-y: auto;
         padding: 0.15rem 0.5rem 0.35rem 0;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(-0.5rem);
+        transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .question-nav.is-visible {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(0);
     }
 
     .question-nav-title {
@@ -281,20 +291,61 @@ def sync_question_nav_answer_state(question_count):
             }});
         }}
 
-        function bindInputs() {{
-            doc.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach((input) => {{
-                if (input.dataset.quizNavBound === 'true') return;
-                input.dataset.quizNavBound = 'true';
-                input.addEventListener('change', updateNav, {{ passive: true }});
-                input.addEventListener('click', () => window.setTimeout(updateNav, 0), {{ passive: true }});
-            }});
+        function updateNavVisibility() {{
+            const nav = doc.querySelector('.question-nav');
+            const marker = doc.getElementById('quiz-section-start');
+            if (!nav || !marker) return;
+
+            const markerTop = marker.getBoundingClientRect().top;
+            const showThreshold = Math.min(320, window.parent.innerHeight * 0.45);
+            nav.classList.toggle('is-visible', markerTop <= showThreshold);
+        }}
+
+        function inputFromEvent(event) {{
+            const target = event.target;
+            if (!target || !target.closest) return null;
+
+            const directInput = target.closest('input[type="radio"], input[type="checkbox"]');
+            if (directInput) return directInput;
+
+            const label = target.closest('label');
+            if (!label) return null;
+
+            return label.querySelector('input[type="radio"], input[type="checkbox"]');
+        }}
+
+        function markAnswered(input) {{
+            const idx = questionForInput(input, anchors());
+            if (idx < 0 || idx >= questionCount) return;
+
+            const item = doc.querySelector(`.question-nav-item[data-question-index="${{idx}}"]`);
+            if (item) {{
+                item.classList.add('answered');
+            }}
+        }}
+
+        function handleEarlyInput(event) {{
+            const input = inputFromEvent(event);
+            if (!input) return;
+
+            markAnswered(input);
+            window.parent.requestAnimationFrame(updateNav);
+            window.setTimeout(updateNav, 0);
+            window.setTimeout(updateNav, 60);
         }}
 
         function refresh() {{
-            bindInputs();
             updateNav();
+            updateNavVisibility();
         }}
 
+        window.parent.addEventListener('scroll', updateNavVisibility, {{ passive: true }});
+        window.parent.addEventListener('resize', updateNavVisibility, {{ passive: true }});
+        doc.addEventListener('pointerdown', handleEarlyInput, true);
+        doc.addEventListener('mousedown', handleEarlyInput, true);
+        doc.addEventListener('touchstart', handleEarlyInput, true);
+        doc.addEventListener('click', handleEarlyInput, true);
+        doc.addEventListener('change', () => window.setTimeout(updateNav, 0), true);
         refresh();
         const observer = new MutationObserver(refresh);
         observer.observe(doc.body, {{ childList: true, subtree: true }});
@@ -371,6 +422,7 @@ questions = st.session_state.get("questions")
 
 if questions:
     st.markdown("---")
+    st.markdown('<div id="quiz-section-start"></div>', unsafe_allow_html=True)
     st.markdown("### Bước 2. Làm bài thi")
 
     # layout chia 2 cột giống hình: trái là danh sách số câu, phải là nội dung
