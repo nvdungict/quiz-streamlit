@@ -16,24 +16,19 @@ st.markdown(
     }
 
     .question-nav {
+        width: 100%;
+        max-height: calc(100vh - 7.25rem);
+        overflow-y: auto;
+        padding: 0.15rem 0.5rem 0.35rem 0;
+    }
+
+    .question-nav.is-fixed {
         position: fixed;
         top: 7.25rem;
         left: max(0.5rem, calc((100vw - 78rem) / 2 - 5.25rem));
         z-index: 100;
         width: clamp(13rem, 18vw, 18rem);
         max-height: calc(100vh - 8.5rem);
-        overflow-y: auto;
-        padding: 0.15rem 0.5rem 0.35rem 0;
-        opacity: 0;
-        pointer-events: none;
-        transform: translateX(-0.5rem);
-        transition: opacity 120ms ease, transform 120ms ease;
-    }
-
-    .question-nav.is-visible {
-        opacity: 1;
-        pointer-events: auto;
-        transform: translateX(0);
     }
 
     .question-nav-title {
@@ -80,7 +75,7 @@ st.markdown(
     }
 
     @media (max-width: 900px) {
-        .question-nav {
+        .question-nav.is-fixed {
             top: 3.65rem;
             left: 0;
             right: 0;
@@ -235,6 +230,7 @@ def render_question_nav(questions):
 
     st.markdown(
         f"""
+        <div id="question-nav-pin"></div>
         <div class="question-nav">
             <div class="question-nav-title">Câu hỏi</div>
             <div class="question-nav-grid">
@@ -291,14 +287,13 @@ def sync_question_nav_answer_state(question_count):
             }});
         }}
 
-        function updateNavVisibility() {{
+        function updateNavPinState() {{
             const nav = doc.querySelector('.question-nav');
-            const marker = doc.getElementById('quiz-section-start');
-            if (!nav || !marker) return;
+            const pin = doc.getElementById('question-nav-pin');
+            if (!nav || !pin) return;
 
-            const markerTop = marker.getBoundingClientRect().top;
-            const visibleLine = window.parent.innerHeight * 0.75;
-            nav.classList.toggle('is-visible', markerTop <= visibleLine);
+            const fixedTop = window.parent.innerWidth <= 900 ? 58 : 116;
+            nav.classList.toggle('is-fixed', pin.getBoundingClientRect().top <= fixedTop);
         }}
 
         function inputFromEvent(event) {{
@@ -336,11 +331,11 @@ def sync_question_nav_answer_state(question_count):
 
         function refresh() {{
             updateNav();
-            updateNavVisibility();
+            updateNavPinState();
         }}
 
-        window.parent.addEventListener('scroll', updateNavVisibility, {{ passive: true }});
-        window.parent.addEventListener('resize', updateNavVisibility, {{ passive: true }});
+        window.parent.addEventListener('scroll', updateNavPinState, {{ passive: true }});
+        window.parent.addEventListener('resize', updateNavPinState, {{ passive: true }});
         doc.addEventListener('pointerdown', handleEarlyInput, true);
         doc.addEventListener('mousedown', handleEarlyInput, true);
         doc.addEventListener('touchstart', handleEarlyInput, true);
@@ -422,7 +417,6 @@ questions = st.session_state.get("questions")
 
 if questions:
     st.markdown("---")
-    st.markdown('<div id="quiz-section-start"></div>', unsafe_allow_html=True)
     st.markdown("### Bước 2. Làm bài thi")
 
     # layout chia 2 cột giống hình: trái là danh sách số câu, phải là nội dung
