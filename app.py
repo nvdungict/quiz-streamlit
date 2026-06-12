@@ -346,6 +346,8 @@ def sync_question_nav_answer_state(question_count):
         observer.observe(doc.body, {{ childList: true, subtree: true }});
         window.setTimeout(refresh, 100);
         window.setTimeout(refresh, 500);
+        window.setTimeout(refresh, 1200);
+        window.setTimeout(refresh, 2500);
         </script>
         """,
         height=0,
@@ -424,6 +426,7 @@ if questions:
 
     with col_nav:
         render_question_nav(questions)
+        sync_question_nav_answer_state(len(questions))
 
     with col_exam:
         st.subheader("Exam Questions")
@@ -450,8 +453,6 @@ if questions:
                 for j, opt in enumerate(options):
                     st.checkbox(opt, key=f"q_{i}_opt_{j}")
             st.markdown("---")
-
-        sync_question_nav_answer_state(len(questions))
 
         submit_btn = st.button("Nộp bài thi")
 
