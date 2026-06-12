@@ -1,5 +1,6 @@
 import json
 import html
+import random
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -432,6 +433,8 @@ def render_upload_stage():
         help="File cần chứa nội dung JSON giống ô nhập bên trên.",
     )
 
+    shuffle_questions = st.checkbox("Xáo trộn thứ tự câu hỏi", value=False)
+
     col_load, col_info = st.columns([1, 3])
     with col_load:
         load_btn = st.button("Tải đề thi / Cập nhật")
@@ -447,7 +450,12 @@ def render_upload_stage():
                 source_text = json_text
 
             load_questions_from_text(source_text)
+            
+            if shuffle_questions and st.session_state["questions"]:
+                random.shuffle(st.session_state["questions"])
+                
             st.session_state["current_stage"] = "exam"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
         except Exception as e:
             st.session_state["questions"] = None
@@ -460,6 +468,7 @@ def render_exam_stage():
         st.error("Không tìm thấy dữ liệu đề thi!")
         if st.button("Quay lại"):
             st.session_state["current_stage"] = "upload"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
         return
 
@@ -469,6 +478,11 @@ def render_exam_stage():
     col_nav, col_exam = st.columns([1, 3])
 
     with col_nav:
+        if st.button("⬅ Quay lại", use_container_width=True):
+            st.session_state["current_stage"] = "upload"
+            st.session_state["scroll_to_top"] = True
+            st.rerun()
+
         col_title, col_btn = st.columns([1, 1])
         with col_title:
             st.markdown("<h3 style='margin:0; padding:0;'>Câu hỏi</h3>", unsafe_allow_html=True)
@@ -487,6 +501,7 @@ def render_exam_stage():
                 "max_score": len(questions),  # mỗi câu tối đa 1 điểm
             }
             st.session_state["current_stage"] = "result"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
 
     with col_exam:
@@ -521,6 +536,7 @@ def render_result_stage():
         st.error("Chưa có kết quả thi!")
         if st.button("Quay lại"):
             st.session_state["current_stage"] = "upload"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
         return
 
@@ -546,12 +562,14 @@ def render_result_stage():
         if st.button("Làm lại bài này"):
             clear_answers()
             st.session_state["current_stage"] = "exam"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
     with col2:
         if st.button("Tải đề thi mới"):
             st.session_state["questions"] = None
             clear_answers()
             st.session_state["current_stage"] = "upload"
+            st.session_state["scroll_to_top"] = True
             st.rerun()
             
     st.markdown("---")
@@ -608,6 +626,22 @@ if "questions" not in st.session_state:
 
 if "current_stage" not in st.session_state:
     st.session_state["current_stage"] = "upload"
+
+if st.session_state.get("scroll_to_top"):
+    components.html(
+        """
+        <script>
+            const doc = window.parent.document;
+            const main = doc.querySelector('.main') || doc.querySelector('[data-testid="stAppViewContainer"]');
+            if (main) {
+                main.scrollTo({top: 0, behavior: 'instant'});
+            }
+            window.parent.scrollTo({top: 0, behavior: 'instant'});
+        </script>
+        """,
+        height=0,
+    )
+    st.session_state["scroll_to_top"] = False
 
 stage = st.session_state["current_stage"]
 
