@@ -513,7 +513,7 @@ def render_exam_stage():
                 f'<div id="question-{i + 1}" class="question-anchor"></div>',
                 unsafe_allow_html=True,
             )
-            st.markdown(f"**Question {q.get('id', i+1)}.** {q['question']}")
+            st.markdown(f"**Question {i + 1}.** {q['question']}")
             q_type = q.get("type", "single")
             options = q["options"]
 
@@ -588,7 +588,7 @@ def render_result_stage():
                 f'<div id="question-{i + 1}" class="question-anchor"></div>',
                 unsafe_allow_html=True,
             )
-            st.markdown(f"**Question {d.get('id', i+1)}.** {d['question']} (Điểm: **{d['score']:.2f}**)")
+            st.markdown(f"**Question {i + 1}.** {d['question']} (Điểm: **{d['score']:.2f}**)")
 
             # hiển thị từng đáp án với icon trực quan
             for idx, opt in enumerate(d["options"]):
