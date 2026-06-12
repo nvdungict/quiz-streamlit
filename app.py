@@ -1,8 +1,87 @@
 import json
+import html
 
 import streamlit as st
 
 st.set_page_config(page_title="Quiz Demo", layout="wide")
+
+st.markdown(
+    """
+    <style>
+    html {
+        scroll-behavior: smooth;
+    }
+
+    .question-nav {
+        position: sticky;
+        top: 1rem;
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        padding-right: 0.35rem;
+    }
+
+    .question-nav-title {
+        margin: 0 0 1rem;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: inherit;
+    }
+
+    .question-nav-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(2.75rem, 1fr));
+        gap: 0.9rem;
+    }
+
+    .question-nav-item {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        aspect-ratio: 1 / 1;
+        min-width: 2.75rem;
+        border: 1px solid rgba(156, 163, 175, 0.45);
+        border-radius: 0.5rem;
+        background: rgba(17, 24, 39, 0.25);
+        color: inherit !important;
+        font-weight: 700;
+        text-decoration: none !important;
+        transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    }
+
+    .question-nav-item:hover {
+        border-color: rgba(96, 165, 250, 0.9);
+        transform: translateY(-1px);
+    }
+
+    .question-nav-item.answered {
+        background: #2563eb;
+        border-color: #60a5fa;
+        color: #ffffff !important;
+    }
+
+    .question-anchor {
+        scroll-margin-top: 1rem;
+    }
+
+    @media (max-width: 900px) {
+        .question-nav {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            max-height: 42vh;
+            padding: 0.75rem 0;
+            background: rgb(14, 17, 23);
+        }
+
+        .question-nav-grid {
+            grid-template-columns: repeat(6, minmax(2.5rem, 1fr));
+            gap: 0.5rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 # ----------------- HÀM CHẤM ĐIỂM -----------------
@@ -71,6 +150,58 @@ def clear_answers():
         del st.session_state["last_result"]
 
 
+def is_question_answered(idx, question):
+    q_type = question.get("type", "single")
+
+    if q_type == "single":
+        return st.session_state.get(f"q_{idx}") is not None
+
+    options = question.get("options", [])
+    return any(st.session_state.get(f"q_{idx}_opt_{j}", False) for j, _ in enumerate(options))
+
+
+def validate_questions(questions):
+    assert isinstance(questions, list), "JSON phải là một list các câu hỏi."
+    assert len(questions) > 0, "Danh sách câu hỏi không được để trống."
+
+    for idx, q in enumerate(questions, start=1):
+        assert isinstance(q, dict), f"Câu {idx} phải là một object."
+        for field in ["question", "options", "correct_answers"]:
+            assert field in q, f"Thiếu trường '{field}' trong câu {idx}."
+        assert isinstance(q["options"], list) and q["options"], f"'options' của câu {idx} phải là list không rỗng."
+        assert isinstance(q["correct_answers"], list), f"'correct_answers' của câu {idx} phải là list."
+
+
+def load_questions_from_text(raw_text):
+    questions = json.loads(raw_text)
+    validate_questions(questions)
+    st.session_state["questions"] = questions
+    clear_answers()
+
+
+def render_question_nav(questions):
+    nav_items = []
+    for idx, question in enumerate(questions):
+        answered_class = " answered" if is_question_answered(idx, question) else ""
+        label = html.escape(str(idx + 1))
+        nav_items.append(
+            f'<a class="question-nav-item{answered_class}" '
+            f'href="#question-{idx + 1}" title="Question {idx + 1}">{label}</a>'
+        )
+
+    st.markdown(
+        f"""
+        <div class="question-nav">
+            <div class="question-nav-title">Câu hỏi</div>
+            <div class="question-nav-grid">
+                {''.join(nav_items)}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ----------------- GIAO DIỆN NHẬP JSON -----------------
 st.title("Exam Questions - Streamlit Demo")
 
@@ -99,30 +230,34 @@ json_text = st.text_area(
     height=300,
 )
 
+uploaded_file = st.file_uploader(
+    "Hoặc upload file đề thi (.json hoặc .txt)",
+    type=["json", "txt"],
+    help="File cần chứa nội dung JSON giống ô nhập bên trên.",
+)
+
 col_load, col_info = st.columns([1, 3])
 with col_load:
     load_btn = st.button("Tải đề thi / Cập nhật")
 
 with col_info:
-    st.caption("✅ Bạn có thể sửa JSON ở bên trên rồi bấm **Tải đề thi** để cập nhật.")
+    st.caption("Bạn có thể paste JSON hoặc upload file `.json` / `.txt`, rồi bấm **Tải đề thi** để cập nhật.")
 
 if "questions" not in st.session_state:
     st.session_state["questions"] = None
 
 if load_btn:
     try:
-        questions = json.loads(json_text)
-        assert isinstance(questions, list), "JSON phải là một list các câu hỏi."
-        # kiểm tra sơ bộ cấu trúc
-        for q in questions:
-            for field in ["question", "options", "correct_answers"]:
-                assert field in q, f"Thiếu trường '{field}' trong một câu hỏi."
-        st.session_state["questions"] = questions
-        clear_answers()
+        if uploaded_file is not None:
+            source_text = uploaded_file.getvalue().decode("utf-8-sig")
+        else:
+            source_text = json_text
+
+        load_questions_from_text(source_text)
         st.success("Đã tải đề thi thành công!")
     except Exception as e:
         st.session_state["questions"] = None
-        st.error(f"Lỗi khi đọc JSON: {e}")
+        st.error(f"Lỗi khi đọc đề thi: {e}")
 
 
 # ----------------- GIAO DIỆN LÀM BÀI -----------------
@@ -136,19 +271,17 @@ if questions:
     col_nav, col_exam = st.columns([1, 3])
 
     with col_nav:
-        st.markdown("#### Câu hỏi")
-        n = len(questions)
-        cols = st.columns(5)
-        for idx in range(n):
-            col = cols[idx % 5]
-            with col:
-                st.button(f"{idx+1}", key=f"nav_{idx}", help=f"Question {idx+1}")
+        render_question_nav(questions)
 
     with col_exam:
         st.subheader("Exam Questions")
 
         # hiển thị từng câu
         for i, q in enumerate(questions):
+            st.markdown(
+                f'<div id="question-{i + 1}" class="question-anchor"></div>',
+                unsafe_allow_html=True,
+            )
             st.markdown(f"**Question {q.get('id', i+1)}.** {q['question']}")
             q_type = q.get("type", "single")
             options = q["options"]
