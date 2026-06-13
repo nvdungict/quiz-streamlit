@@ -459,6 +459,19 @@ def render_upload_stage():
 
             load_questions_from_text(source_text)
             
+            # Log upload event
+            try:
+                ip = get_client_ip()
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                num_q = len(st.session_state["questions"]) if st.session_state.get("questions") else 0
+                conn = sqlite3.connect("visits.db")
+                c = conn.cursor()
+                c.execute("INSERT INTO uploads (ip_address, num_questions, uploaded_at) VALUES (?, ?, ?)", (ip, num_q, now_str))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            
             if shuffle_questions and st.session_state["questions"]:
                 random.shuffle(st.session_state["questions"])
                 
@@ -503,10 +516,25 @@ def render_exam_stage():
 
         if submit_btn:
             total_score, detail_scores = grade_exam(questions)
+            max_score = len(questions)
+            
+            # Log exam result
+            try:
+                ip = get_client_ip()
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                pct = (total_score / max_score) * 100 if max_score > 0 else 0
+                conn = sqlite3.connect("visits.db")
+                c = conn.cursor()
+                c.execute("INSERT INTO exam_results (ip_address, total_score, max_score, percentage, submitted_at) VALUES (?, ?, ?, ?, ?)", (ip, total_score, max_score, pct, now_str))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+
             st.session_state["last_result"] = {
                 "total": total_score,
                 "detail": detail_scores,
-                "max_score": len(questions),  # mỗi câu tối đa 1 điểm
+                "max_score": max_score,
             }
             st.session_state["current_stage"] = "result"
             st.session_state["scroll_to_top"] = True
@@ -637,6 +665,24 @@ def init_db():
             visited_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS uploads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT,
+            num_questions INTEGER,
+            uploaded_at DATETIME
+        )
+    ''')
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS exam_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT,
+            total_score REAL,
+            max_score REAL,
+            percentage REAL,
+            submitted_at DATETIME
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -667,10 +713,14 @@ def get_and_increment_visit_count():
     if "has_visited" not in st.session_state:
         st.session_state["has_visited"] = True
         ip = get_client_ip()
+        
+        # Lấy giờ thực tế của máy chủ thay vì để DB tự tạo (DB hay bị lệch múi giờ UTC)
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
         try:
             conn = sqlite3.connect("visits.db")
             c = conn.cursor()
-            c.execute("INSERT INTO visits (ip_address) VALUES (?)", (ip,))
+            c.execute("INSERT INTO visits (ip_address, visited_at) VALUES (?, ?)", (ip, now_str))
             conn.commit()
             conn.close()
         except Exception:
@@ -687,7 +737,7 @@ def get_and_increment_visit_count():
         return 0
 
 def render_admin_stage():
-    st.markdown("## Admin Dashboard - Quản lý Truy cập")
+    st.markdown("## Admin Dashboard - Thống kê Hoạt động")
     
     if st.button("Đăng xuất"):
         st.session_state.clear()
@@ -696,18 +746,59 @@ def render_admin_stage():
     try:
         conn = sqlite3.connect("visits.db")
         c = conn.cursor()
+        
+        # Lượt truy cập
         c.execute("SELECT id, ip_address, visited_at FROM visits ORDER BY visited_at DESC")
-        rows = c.fetchall()
+        visits_rows = c.fetchall()
+        
+        # Đề đã tải lên
+        c.execute("SELECT id, ip_address, num_questions, uploaded_at FROM uploads ORDER BY uploaded_at DESC")
+        uploads_rows = c.fetchall()
+        
+        # Kết quả thi
+        c.execute("SELECT id, ip_address, total_score, max_score, percentage, submitted_at FROM exam_results ORDER BY submitted_at DESC")
+        exam_rows = c.fetchall()
+        
         conn.close()
         
-        st.metric("Tổng lượt truy cập", f"{len(rows)} lượt")
-        st.markdown("### Lịch sử truy cập chi tiết")
+        # Summary Metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Lượt truy cập", f"{len(visits_rows)}")
+        with col2:
+            st.metric("Số đề tải lên", f"{len(uploads_rows)}")
+        with col3:
+            st.metric("Số lượt thi", f"{len(exam_rows)}")
+            
+        st.markdown("---")
         
-        if rows:
-            data = [{"ID": r[0], "IP Address": r[1], "Thời gian": r[2]} for r in rows]
-            st.dataframe(data, use_container_width=True)
-        else:
-            st.info("Chưa có lượt truy cập nào.")
+        # Tabs for details
+        tab1, tab2, tab3 = st.tabs(["Lượt truy cập", "Lịch sử tải đề", "Kết quả thi"])
+        
+        with tab1:
+            st.markdown("### Chi tiết lượt truy cập")
+            if visits_rows:
+                data = [{"ID": r[0], "IP Address": r[1], "Thời gian": r[2]} for r in visits_rows]
+                st.dataframe(data, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu.")
+                
+        with tab2:
+            st.markdown("### Chi tiết tải đề")
+            if uploads_rows:
+                data = [{"ID": r[0], "IP Address": r[1], "Số câu hỏi": r[2], "Thời gian tải": r[3]} for r in uploads_rows]
+                st.dataframe(data, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu.")
+                
+        with tab3:
+            st.markdown("### Lịch sử làm bài")
+            if exam_rows:
+                data = [{"ID": r[0], "IP Address": r[1], "Điểm": f"{r[2]:.2f} / {r[3]}", "Tỷ lệ (%)": f"{r[4]:.1f}%", "Thời gian nộp": r[5]} for r in exam_rows]
+                st.dataframe(data, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu.")
+                
     except Exception as e:
         st.error(f"Lỗi truy xuất dữ liệu: {e}")
 
