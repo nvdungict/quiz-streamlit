@@ -1,6 +1,9 @@
 import json
 import html
 import random
+import os
+import sqlite3
+from datetime import datetime
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -115,6 +118,11 @@ def require_password():
     if submitted:
         if password == APP_PASSWORD:
             st.session_state["authenticated"] = True
+            st.session_state["is_admin"] = False
+            st.rerun()
+        elif password == "admin":
+            st.session_state["authenticated"] = True
+            st.session_state["is_admin"] = True
             st.rerun()
         else:
             st.error("Sai mật khẩu.")
@@ -618,10 +626,102 @@ def render_result_stage():
 
             st.markdown("---")
 
+# --- DB INIT ---
+def init_db():
+    conn = sqlite3.connect("visits.db")
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT,
+            visited_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+def get_client_ip():
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "headers"):
+            headers = st.context.headers
+            ip = headers.get("X-Forwarded-For", headers.get("X-Real-IP", "Unknown IP"))
+            if ip and ip != "Unknown IP":
+                return ip.split(",")[0].strip()
+    except Exception:
+        pass
+        
+    try:
+        from streamlit.web.server.websocket_headers import _get_websocket_headers
+        headers = _get_websocket_headers()
+        ip = headers.get("X-Forwarded-For", "Unknown IP")
+        if ip and ip != "Unknown IP":
+            return ip.split(",")[0].strip()
+    except Exception:
+        pass
+        
+    return "Unknown IP"
+
+def get_and_increment_visit_count():
+    if "has_visited" not in st.session_state:
+        st.session_state["has_visited"] = True
+        ip = get_client_ip()
+        try:
+            conn = sqlite3.connect("visits.db")
+            c = conn.cursor()
+            c.execute("INSERT INTO visits (ip_address) VALUES (?)", (ip,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+    try:
+        conn = sqlite3.connect("visits.db")
+        c = conn.cursor()
+        c.execute("SELECT COUNT(*) FROM visits")
+        count = c.fetchone()[0]
+        conn.close()
+        return count
+    except Exception:
+        return 0
+
+def render_admin_stage():
+    st.markdown("## Admin Dashboard - Quản lý Truy cập")
+    
+    if st.button("Đăng xuất"):
+        st.session_state.clear()
+        st.rerun()
+        
+    try:
+        conn = sqlite3.connect("visits.db")
+        c = conn.cursor()
+        c.execute("SELECT id, ip_address, visited_at FROM visits ORDER BY visited_at DESC")
+        rows = c.fetchall()
+        conn.close()
+        
+        st.metric("Tổng lượt truy cập", f"{len(rows)} lượt")
+        st.markdown("### Lịch sử truy cập chi tiết")
+        
+        if rows:
+            data = [{"ID": r[0], "IP Address": r[1], "Thời gian": r[2]} for r in rows]
+            st.dataframe(data, use_container_width=True)
+        else:
+            st.info("Chưa có lượt truy cập nào.")
+    except Exception as e:
+        st.error(f"Lỗi truy xuất dữ liệu: {e}")
+
 # ----------------- MAIN FLOW -----------------
 require_password()
 
+if st.session_state.get("is_admin"):
+    render_admin_stage()
+    st.stop()
+
 st.title("A TTQT nhíeeeee")
+
+visit_count = get_and_increment_visit_count()
+st.sidebar.markdown(f"👁️ **Lượt truy cập:** {visit_count}")
 
 if "questions" not in st.session_state:
     st.session_state["questions"] = None
