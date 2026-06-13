@@ -475,6 +475,7 @@ def render_upload_stage():
             if shuffle_questions and st.session_state["questions"]:
                 random.shuffle(st.session_state["questions"])
                 
+            st.session_state["exam_started_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             st.session_state["current_stage"] = "exam"
             st.session_state["scroll_to_top"] = True
             st.rerun()
@@ -522,10 +523,11 @@ def render_exam_stage():
             try:
                 ip = get_client_ip()
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                started_at = st.session_state.get("exam_started_at", now_str)
                 pct = (total_score / max_score) * 100 if max_score > 0 else 0
                 conn = sqlite3.connect("visits.db")
                 c = conn.cursor()
-                c.execute("INSERT INTO exam_results (ip_address, total_score, max_score, percentage, submitted_at) VALUES (?, ?, ?, ?, ?)", (ip, total_score, max_score, pct, now_str))
+                c.execute("INSERT INTO exam_results (ip_address, total_score, max_score, percentage, started_at, submitted_at) VALUES (?, ?, ?, ?, ?, ?)", (ip, total_score, max_score, pct, started_at, now_str))
                 conn.commit()
                 conn.close()
             except Exception:
@@ -597,6 +599,7 @@ def render_result_stage():
     with col1:
         if st.button("Làm lại bài này"):
             clear_answers()
+            st.session_state["exam_started_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             st.session_state["current_stage"] = "exam"
             st.session_state["scroll_to_top"] = True
             st.rerun()
@@ -683,6 +686,10 @@ def init_db():
             submitted_at DATETIME
         )
     ''')
+    try:
+        c.execute("ALTER TABLE exam_results ADD COLUMN started_at DATETIME")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -739,9 +746,14 @@ def get_and_increment_visit_count():
 def render_admin_stage():
     st.markdown("## Admin Dashboard - Thống kê Hoạt động")
     
-    if st.button("Đăng xuất"):
-        st.session_state.clear()
-        st.rerun()
+    col_btn1, col_btn2 = st.columns([1, 1])
+    with col_btn1:
+        if st.button("Đăng xuất"):
+            st.session_state.clear()
+            st.rerun()
+    with col_btn2:
+        if st.button("🔄 Cập nhật dữ liệu"):
+            st.rerun()
         
     try:
         conn = sqlite3.connect("visits.db")
@@ -756,7 +768,7 @@ def render_admin_stage():
         uploads_rows = c.fetchall()
         
         # Kết quả thi
-        c.execute("SELECT id, ip_address, total_score, max_score, percentage, submitted_at FROM exam_results ORDER BY submitted_at DESC")
+        c.execute("SELECT id, ip_address, total_score, max_score, percentage, started_at, submitted_at FROM exam_results ORDER BY submitted_at DESC")
         exam_rows = c.fetchall()
         
         conn.close()
@@ -794,7 +806,7 @@ def render_admin_stage():
         with tab3:
             st.markdown("### Lịch sử làm bài")
             if exam_rows:
-                data = [{"ID": r[0], "IP Address": r[1], "Điểm": f"{r[2]:.2f} / {r[3]}", "Tỷ lệ (%)": f"{r[4]:.1f}%", "Thời gian nộp": r[5]} for r in exam_rows]
+                data = [{"ID": r[0], "IP Address": r[1], "Điểm": f"{r[2]:.2f} / {r[3]}", "Tỷ lệ (%)": f"{r[4]:.1f}%", "Bắt đầu thi": r[5] or "N/A", "Thời gian nộp": r[6]} for r in exam_rows]
                 st.dataframe(data, use_container_width=True)
             else:
                 st.info("Chưa có dữ liệu.")
