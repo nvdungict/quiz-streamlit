@@ -3,7 +3,7 @@ import html
 import random
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -462,7 +462,7 @@ def render_upload_stage():
             # Log upload event
             try:
                 ip = get_client_ip()
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now_str = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                 num_q = len(st.session_state["questions"]) if st.session_state.get("questions") else 0
                 conn = sqlite3.connect("visits.db")
                 c = conn.cursor()
@@ -475,7 +475,7 @@ def render_upload_stage():
             if shuffle_questions and st.session_state["questions"]:
                 random.shuffle(st.session_state["questions"])
                 
-            st.session_state["exam_started_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state["exam_started_at"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
             st.session_state["current_stage"] = "exam"
             st.session_state["scroll_to_top"] = True
             st.rerun()
@@ -522,7 +522,7 @@ def render_exam_stage():
             # Log exam result
             try:
                 ip = get_client_ip()
-                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                now_str = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
                 started_at = st.session_state.get("exam_started_at", now_str)
                 pct = (total_score / max_score) * 100 if max_score > 0 else 0
                 conn = sqlite3.connect("visits.db")
@@ -599,7 +599,7 @@ def render_result_stage():
     with col1:
         if st.button("Làm lại bài này"):
             clear_answers()
-            st.session_state["exam_started_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state["exam_started_at"] = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
             st.session_state["current_stage"] = "exam"
             st.session_state["scroll_to_top"] = True
             st.rerun()
@@ -722,7 +722,7 @@ def get_and_increment_visit_count():
         ip = get_client_ip()
         
         # Lấy giờ thực tế của máy chủ thay vì để DB tự tạo (DB hay bị lệch múi giờ UTC)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = (datetime.utcnow() + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
         
         try:
             conn = sqlite3.connect("visits.db")
