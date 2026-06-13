@@ -609,10 +609,12 @@ def render_result_stage():
                     note = ""
 
                 st.markdown(f"{prefix} {opt}{note}")
-                # show explanation for this option if provided in question data
-                explanations = d.get("explanations", [])
-                if idx < len(explanations) and explanations[idx]:
-                    st.caption(explanations[idx])
+
+            # show explanations at the bottom of the question prominently
+            explanations = d.get("explanations", [])
+            valid_exps = [e for e in explanations if isinstance(e, str) and e.strip()]
+            if valid_exps:
+                st.info("\n\n".join(valid_exps), icon="💡")
 
             st.markdown("---")
 
