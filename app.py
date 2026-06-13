@@ -720,8 +720,8 @@ if st.session_state.get("is_admin"):
 
 st.title("A TTQT nhíeeeee")
 
-visit_count = get_and_increment_visit_count()
-st.sidebar.markdown(f"👁️ **Lượt truy cập:** {visit_count}")
+# Gọi hàm để hệ thống ghi nhận lượt truy cập vào database, nhưng không hiển thị ra Sidebar
+get_and_increment_visit_count()
 
 if "questions" not in st.session_state:
     st.session_state["questions"] = None
